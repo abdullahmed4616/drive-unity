@@ -1,14 +1,14 @@
 'use client';
 
 import { SessionProvider } from './SessionProvider';
-import { QueryProvider } from './QueryProvider';
+import { SWRProvider } from './SWRProvider';
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
-      <QueryProvider>
+      <SWRProvider>
         <>{children}</>
-      </QueryProvider>
+      </SWRProvider>
     </SessionProvider>
   );
 }
