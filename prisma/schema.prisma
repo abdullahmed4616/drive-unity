@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum SubscriptionCycle {
+  monthly
+  yearly
+}
+
+enum SubscriptionTier {
+  FREE
+  BASE
+  PRO
+}
+
+model User {
+  id            String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  name          String
+  email         String    @unique
+  password      String?
+  emailVerified DateTime? @map("email_verified") @db.Timestamptz(6)
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  googleDriveAccounts    GoogleDriveAccount[]    @relation("UserGoogleDriveAccounts")
+  googleDriveFiles       GoogleDriveFile[]       @relation("UserGoogleDriveFiles")
+  googleDriveFolders     GoogleDriveFolder[]     @relation("UserGoogleDriveFolders")
+  googleDriveFolderTrees GoogleDriveFolderTree[] @relation("UserGoogleDriveFolderTrees")
+
+  oneDriveAccounts    OneDriveAccount[]    @relation("UserOneDriveAccounts")
+  oneDriveFiles       OneDriveFile[]       @relation("UserOneDriveFiles")
+  oneDriveFolders     OneDriveFolder[]     @relation("UserOneDriveFolders")
+  oneDriveFolderTrees OneDriveFolderTree[] @relation("UserOneDriveFolderTrees")
+
+  otpCodes     OTPCode[]
+  subscription SubscribedUser?
+
+  @@map("users")
+}
+
+model SubscriptionPlan {
+  uuid        String @id @default(dbgenerated("gen_random_uuid()::text"))
+  packageName String @map("package_name")
+
+  monthlyPrice Decimal? @map("monthly_price")
+  yearlyPrice  Decimal? @map("yearly_price")
+
+  noOfAccounts       Int  @map("no_of_accounts")
+  noOfEmailAccounts  Int? @map("no_of_email_accounts")
+  noOfCloudAccounts  Int? @map("no_of_cloud_accounts")
+  noOfSocialAccounts Int? @map("no_of_social_accounts")
+
+  maxConnectedDrives Int              @map("max_connected_drives")
+  tier               SubscriptionTier
+
+  actionLimit Boolean           @map("action_limit")
+  cycle       SubscriptionCycle
+
+  features    Json
+  description String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subscribedUsers SubscribedUser[]
+
+  @@map("subscription_plans")
+}
+
+model SubscribedUser {
+  uuid String @id @default(dbgenerated("gen_random_uuid()::text"))
+
+  userId             String @unique @map("user_id")
+  subscriptionPlanId String @map("subscription_plan_id")
+
+  connectedAccounts       Int
+  connectedEmailAccounts  Int @default(0) @map("connected_email_accounts")
+  connectedCloudAccounts  Int @default(0) @map("connected_cloud_accounts")
+  connectedSocialAccounts Int @default(0) @map("connected_social_accounts")
+
+  usage               Int
+  emailDeletionUsage  BigInt @default(0) @map("email_deletion_usage")
+  cloudDeletionUsage  BigInt @default(0) @map("cloud_deletion_usage")
+  socialDeletionUsage BigInt @default(0) @map("social_deletion_usage")
+
+  paidAmount   Decimal?  @map("paid_amount")
+  subStartTime DateTime? @map("sub_start_time")
+  subEndTime   DateTime? @map("sub_end_time")
+
+  notes String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user             User             @relation(fields: [userId], references: [id])
+  subscriptionPlan SubscriptionPlan @relation(fields: [subscriptionPlanId], references: [uuid])
+
+  @@map("subscribed_users")
+}
+
+model OTPCode {
+  id        String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  code      String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  used      Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([code])
+  @@index([userId])
+  @@map("otp_codes")
+}
+
+model GoogleDriveAccount {
+  id           String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  gmailAccount String    @unique @map("gmail_account")
+  userId       String    @map("user_id")
+  accessToken  String    @map("access_token")
+  refreshToken String    @map("refresh_token")
+  expiresIn    BigInt    @map("expires_in")
+  scope        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  user       User                   @relation("UserGoogleDriveAccounts", fields: [userId], references: [id])
+  files      GoogleDriveFile[]      @relation("GoogleDriveFileAccount")
+  folders    GoogleDriveFolder[]    @relation("GoogleDriveFolderAccount")
+  folderTree GoogleDriveFolderTree? @relation("GoogleDriveFolderTreeAccount")
+
+  @@map("google_drive_accounts")
+}
+
+model GoogleDriveFolderTree {
+  googleDriveAccountId String    @id @map("google_drive_account_id")
+  userId               String    @map("user_id")
+  folderTree           Json      @map("folder_tree")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime? @updatedAt @map("updated_at")
+
+  account GoogleDriveAccount @relation("GoogleDriveFolderTreeAccount", fields: [googleDriveAccountId], references: [id])
+  user    User               @relation("UserGoogleDriveFolderTrees", fields: [userId], references: [id])
+
+  @@map("google_drive_folders_trees")
+}
+
+model GoogleDriveFolder {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  userId               String    @map("user_id")
+  googleDriveAccountId String    @map("google_drive_account_id")
+  folderName           String    @map("folder_name")
+  folderParents        String    @map("folder_parents")
+  folderPath           String    @map("folder_path")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime? @updatedAt @map("updated_at")
+
+  files   GoogleDriveFile[]  @relation("GoogleDriveFileFolder")
+  account GoogleDriveAccount @relation("GoogleDriveFolderAccount", fields: [googleDriveAccountId], references: [id])
+  user    User               @relation("UserGoogleDriveFolders", fields: [userId], references: [id])
+
+  @@map("google_drive_folders")
+}
+
+model GoogleDriveFile {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  userId               String    @map("user_id")
+  googleDriveAccountId String    @map("google_drive_account_id")
+  fileId               String    @unique @map("file_id")
+  fileName             String    @map("file_name")
+  fileParents          String    @map("file_parents")
+  fileCreatedTime      DateTime  @map("file_created_time")
+  md5Checksum          String?   @map("md5Checksum")
+  mimeType             String    @map("mime_type")
+  fileSize             BigInt?   @map("file_size")
+  viewedByMeTime       DateTime? @map("viewed_by_me_time")
+  filePath             String    @map("file_path")
+  webViewLink          String?   @map("web_view_link")
+  thumbnailLink        String?   @map("thumbnail_link")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime? @updatedAt @map("updated_at")
+
+  folder  GoogleDriveFolder  @relation("GoogleDriveFileFolder", fields: [fileParents], references: [id])
+  account GoogleDriveAccount @relation("GoogleDriveFileAccount", fields: [googleDriveAccountId], references: [id])
+  user    User               @relation("UserGoogleDriveFiles", fields: [userId], references: [id])
+
+  @@map("google_drive_files")
+}
+
+//////////////////////////////
+// OneDrive
+//////////////////////////////
+
+model OneDriveAccount {
+  id              String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  onedriveAccount String   @unique
+  userId          String
+  accessToken     String
+  refreshToken    String
+  expiresIn       DateTime
+  scope           String?
+  deltaLink       String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+
+  user       User                @relation("UserOneDriveAccounts", fields: [userId], references: [id])
+  files      OneDriveFile[]      @relation("OneDriveFileAccount")
+  folders    OneDriveFolder[]    @relation("OneDriveFolderAccount")
+  folderTree OneDriveFolderTree? @relation("OneDriveFolderTreeAccount")
+
+  @@map("one_drive_accounts")
+}
+
+model OneDriveFolderTree {
+  oneDriveAccountId String @id
+  userId            String
+  folderTree        Json
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
+
+  account OneDriveAccount @relation("OneDriveFolderTreeAccount", fields: [oneDriveAccountId], references: [id])
+  user    User            @relation("UserOneDriveFolderTrees", fields: [userId], references: [id])
+
+  @@map("one_drive_folders_trees")
+}
+
+model OneDriveFolder {
+  id                String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  userId            String
+  oneDriveAccountId String
+  folderName        String
+  folderParents     String
+  folderPath        String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime? @updatedAt
+
+  files   OneDriveFile[]  @relation("OneDriveFileFolder")
+  account OneDriveAccount @relation("OneDriveFolderAccount", fields: [oneDriveAccountId], references: [id])
+  user    User            @relation("UserOneDriveFolders", fields: [userId], references: [id])
+
+  @@map("one_drive_folders")
+}
+
+model OneDriveFile {
+  id                String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  userId            String
+  oneDriveAccountId String
+  fileId            String    @unique
+  fileName          String
+  fileParents       String
+  fileCreatedTime   DateTime
+  md5Checksum       String?
+  mimeType          String
+  fileSize          BigInt?
+  filePath          String
+  lastModifiedTime  DateTime?
+  webViewLink       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime? @updatedAt
+
+  folder  OneDriveFolder  @relation("OneDriveFileFolder", fields: [fileParents], references: [id])
+  account OneDriveAccount @relation("OneDriveFileAccount", fields: [oneDriveAccountId], references: [id])
+  user    User            @relation("UserOneDriveFiles", fields: [userId], references: [id])
+
+  @@map("one_drive_files")
+}
