@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: drive-unity-app
+  namespace: drive-unity
+  labels:
+    app.kubernetes.io/name: drive-unity-app
+    app.kubernetes.io/part-of: drive-unity
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: drive-unity-app
