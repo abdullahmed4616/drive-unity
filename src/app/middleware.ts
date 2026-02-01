@@ -75,6 +75,11 @@ async function validateSession(request: NextRequest): Promise<boolean> {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Redirect root to /home
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/home', request.url));
+  }
+
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
