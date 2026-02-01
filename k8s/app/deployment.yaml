@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drive-unity-app
+  namespace: drive-unity
+  labels:
+    app.kubernetes.io/name: drive-unity-app
+    app.kubernetes.io/part-of: drive-unity
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: drive-unity-app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: drive-unity-app
+        app.kubernetes.io/part-of: drive-unity
+    spec:
+      containers:
+        - name: drive-unity-app
+          image: drive-unity:latest
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: drive-unity-config
+            - secretRef:
+                name: drive-unity-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
